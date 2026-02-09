@@ -3,160 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>東京兩人之旅 2026 (雲端版)</title>
-    
-    <!-- 1. 核心工具 -->
+    <title>東京兩人之旅 2026</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- 2. Firebase SDK (必須有這兩行才能同步) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-
-    <!-- 3. 樣式設定 -->
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'tokyo-pink': '#FF9CA8',
-                        'tokyo-bg': '#FFF5F7',
-                        'tokyo-dark': '#4A4A4A',
-                        'tokyo-blue': '#89CFF0',
-                    },
-                    fontFamily: { sans: ['sans-serif'] }
-                }
-            }
-        }
-    </script>
     <style>
         body { background-color: #FFF5F7; -webkit-tap-highlight-color: transparent; }
         ::-webkit-scrollbar { display: none; }
-        .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; padding-bottom: 80px; position: relative; }
-        .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-        .fade-enter-from, .fade-leave-to { opacity: 0; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #FF9CA8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 50px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="text-tokyo-dark antialiased">
-
-    <div id="app" class="app-container">
-        
-        <!-- Loading 遮罩 -->
+<body class="text-gray-700">
+    <div id="app" class="max-w-md mx-auto min-h-screen pb-20 relative">
+        <!-- Loading -->
         <div v-if="loading" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
             <div class="loader"></div>
-            <p class="text-gray-400 text-sm mt-4">正在同步雲端資料...</p>
+            <p class="text-gray-400 text-sm mt-4">連線中...</p>
         </div>
 
-        <!-- 頁首 -->
-        <header class="relative w-full h-[250px] z-0">
-            <img :src="bannerImage" class="w-full h-full object-cover">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
-            <div class="absolute top-8 left-6 text-white drop-shadow-md">
-                <h1 class="text-3xl font-bold">TOKYO<br>TRIP</h1>
-                <p class="text-sm opacity-90 mt-1">雲端同步版</p>
-            </div>
-            <!-- Tabs -->
-            <div class="absolute bottom-10 right-4 flex gap-3 z-30">
-                <button v-for="tab in tabs" :key="tab.id" @click="currentTab = tab.id"
-                    :class="['w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all border-2 backdrop-blur-md',
-                        currentTab === tab.id ? 'bg-tokyo-pink border-white text-white scale-110' : 'bg-white/80 border-white/50 text-tokyo-pink']">
-                    <i :class="tab.icon"></i>
-                </button>
-            </div>
-        </header>
-
-        <!-- 內容區 -->
-        <main class="relative -mt-6 rounded-t-[30px] bg-tokyo-bg min-h-[calc(100vh-200px)] z-10 pt-6 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
-            <transition name="fade" mode="out-in">
-                <!-- 行程表 -->
-                <div v-if="currentTab === 'itinerary'" key="itinerary">
-                    <div class="flex overflow-x-auto gap-2 px-4 pb-2 sticky top-0 bg-tokyo-bg/95 backdrop-blur z-20">
-                        <button v-for="(day, idx) in tripDates" :key="idx" @click="currentDayIndex = idx"
-                            :class="['flex flex-col items-center min-w-[60px] py-2 rounded-xl border transition',
-                                currentDayIndex === idx ? 'bg-tokyo-pink border-tokyo-pink text-white shadow-md' : 'bg-white border-white text-gray-400']">
-                            <span class="text-lg font-bold">{{ day.week }}</span>
-                            <span class="text-xs">{{ day.dateDisplay }}</span>
-                        </button>
-                    </div>
-
-                    <div class="px-4 pb-24 space-y-3 mt-4">
-                        <div v-if="currentDayItinerary.length === 0" class="text-center py-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                            <i class="fa-regular fa-calendar-plus text-2xl mb-2"></i>
-                            <p class="text-sm">尚無行程，點擊 + 新增</p>
-                        </div>
-
-                        <div v-for="(item, idx) in currentDayItinerary" :key="item.id" class="relative group bg-white p-4 rounded-2xl shadow-sm border border-gray-50" @click="editItem(item, idx)">
-                            <button @click.stop="deleteItem('itinerary', idx)" class="absolute top-2 right-2 text-gray-300 hover:text-red-400 w-8 h-8"><i class="fa-solid fa-trash"></i></button>
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="text-[10px] px-2 py-1 rounded bg-gray-100 text-gray-500 font-bold">{{ getCategoryLabel(item.category) }}</span>
-                                <span class="font-mono font-bold text-tokyo-pink text-lg">{{ item.time }}</span>
-                            </div>
-                            <h3 class="font-bold text-lg mb-1">{{ item.name }}</h3>
-                            <p class="text-xs text-gray-500">{{ item.notes }}</p>
-                            <button @click.stop="openMap(item.name)" class="absolute bottom-3 right-3 w-8 h-8 bg-tokyo-pink text-white rounded-full shadow-md"><i class="fa-solid fa-location-arrow text-xs"></i></button>
-                        </div>
-                    </div>
-                    <button @click="openAddModal('itinerary')" class="fixed bottom-6 right-6 w-14 h-14 bg-tokyo-pink text-white rounded-full shadow-xl flex items-center justify-center text-2xl z-40"><i class="fa-solid fa-plus"></i></button>
-                </div>
-
-                <!-- 購物清單 -->
-                <div v-else-if="currentTab === 'shopping'" key="shopping" class="px-4 pb-24">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div v-for="(item, idx) in shoppingList" :key="idx" class="bg-white rounded-2xl p-3 shadow-sm flex flex-col items-center relative">
-                            <button @click="deleteItem('shopping', idx)" class="absolute top-1 right-1 w-6 h-6 text-gray-300 hover:text-red-400"><i class="fa-solid fa-xmark"></i></button>
-                            <div class="w-full aspect-square bg-gray-50 rounded-xl mb-2 flex items-center justify-center text-gray-300">
-                                <img v-if="item.image" :src="item.image" class="w-full h-full object-cover rounded-xl">
-                                <i v-else class="fa-solid fa-image text-2xl"></i>
-                            </div>
-                            <div class="font-bold text-sm text-center mb-1">{{ item.name }}</div>
-                            <input type="checkbox" v-model="item.checked" @change="syncData" class="w-5 h-5 accent-tokyo-pink">
-                        </div>
-                    </div>
-                    <button @click="openAddModal('shopping')" class="fixed bottom-6 right-6 w-14 h-14 bg-tokyo-pink text-white rounded-full shadow-xl flex items-center justify-center text-2xl z-40"><i class="fa-solid fa-plus"></i></button>
-                </div>
-
-                <div v-else class="px-4 py-10 text-center text-gray-400">功能開發中...</div>
-            </transition>
-        </main>
-
-        <!-- 彈出視窗 -->
-        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showModal = false">
-            <div class="bg-white w-[90%] max-w-[400px] rounded-3xl p-6 shadow-2xl">
-                <h2 class="text-xl font-bold mb-4 text-center">{{ isEditing ? '編輯' : '新增' }}{{ modalType === 'itinerary' ? '行程' : '購物' }}</h2>
-                
-                <div v-if="modalType === 'itinerary'" class="space-y-3">
-                    <div class="flex gap-2">
-                        <input type="time" v-model="form.time" class="bg-gray-50 p-3 rounded-xl w-1/3 text-sm font-bold">
-                        <select v-model="form.category" class="bg-gray-50 p-3 rounded-xl flex-1 text-sm">
-                            <option value="sightseeing">景點</option>
-                            <option value="food">美食</option>
-                            <option value="shopping">購物</option>
-                            <option value="transport">交通</option>
-                            <option value="flight">航班</option>
-                        </select>
-                    </div>
-                    <input type="text" v-model="form.name" placeholder="名稱" class="w-full bg-gray-50 p-3 rounded-xl text-sm">
-                    <textarea v-model="form.notes" placeholder="備註" rows="2" class="w-full bg-gray-50 p-3 rounded-xl text-sm"></textarea>
-                </div>
-
-                <div v-if="modalType === 'shopping'" class="space-y-3">
-                    <input type="text" v-model="form.name" placeholder="商品名稱" class="w-full bg-gray-50 p-3 rounded-xl text-sm">
-                    <input type="text" v-model="form.image" placeholder="圖片網址 (URL)" class="w-full bg-gray-50 p-3 rounded-xl text-sm">
-                </div>
-
-                <button @click="saveItem" class="w-full bg-tokyo-pink text-white py-3 rounded-xl font-bold mt-6 shadow-lg">確認儲存</button>
+        <!-- Banner -->
+        <div class="h-64 relative">
+            <img :src="banner" class="w-full h-full object-cover">
+            <div class="absolute inset-0 bg-black/30 flex items-end p-6">
+                <h1 class="text-3xl font-bold text-white">TOKYO<br>TRIP</h1>
             </div>
         </div>
 
+        <!-- Content -->
+        <div class="bg-[#FFF5F7] -mt-6 rounded-t-3xl relative z-10 min-h-[500px] p-4">
+            <!-- 行程 -->
+            <div v-if="tab==='trip'">
+                <div class="flex overflow-x-auto gap-2 mb-4">
+                    <button v-for="(d,i) in dates" :key="i" @click="dayIdx=i" :class="['flex-col flex items-center min-w-[60px] p-2 rounded-xl border', dayIdx===i?'bg-[#FF9CA8] text-white':'bg-white']">
+                        <span class="font-bold text-lg">{{d.w}}</span><span class="text-xs">{{d.d}}</span>
+                    </button>
+                </div>
+                <div class="space-y-3">
+                    <div v-if="currList.length===0" class="text-center py-10 text-gray-400 border-2 border-dashed rounded-xl">尚無行程</div>
+                    <div v-for="(item,i) in currList" :key="item.id" class="bg-white p-4 rounded-xl shadow-sm relative">
+                        <button @click="del('itinerary', i)" class="absolute top-2 right-2 text-gray-300"><i class="fa-solid fa-trash"></i></button>
+                        <div class="flex justify-between font-bold mb-1">
+                            <span class="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">{{item.cat}}</span>
+                            <span class="text-[#FF9CA8] font-mono">{{item.time}}</span>
+                        </div>
+                        <div class="font-bold text-lg">{{item.name}}</div>
+                    </div>
+                </div>
+                <button @click="addModal='itinerary'" class="fixed bottom-6 right-6 w-14 h-14 bg-[#FF9CA8] text-white rounded-full shadow-xl text-2xl flex items-center justify-center"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            
+            <!-- 購物 -->
+            <div v-else-if="tab==='shop'" class="grid grid-cols-2 gap-4">
+                <div v-for="(item,i) in shopList" :key="i" class="bg-white p-3 rounded-xl shadow-sm text-center relative">
+                    <button @click="del('shopping', i)" class="absolute top-1 right-1 text-gray-300"><i class="fa-solid fa-xmark"></i></button>
+                    <div class="font-bold">{{item.name}}</div>
+                </div>
+                <button @click="addModal='shopping'" class="fixed bottom-6 right-6 w-14 h-14 bg-[#FF9CA8] text-white rounded-full shadow-xl text-2xl flex items-center justify-center"><i class="fa-solid fa-plus"></i></button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="fixed bottom-6 left-6 flex gap-2">
+            <button @click="tab='trip'" :class="['w-12 h-12 rounded-full shadow-lg border-2 flex items-center justify-center', tab==='trip'?'bg-[#FF9CA8] text-white border-white':'bg-white text-[#FF9CA8]']"><i class="fa-regular fa-calendar-days"></i></button>
+            <button @click="tab='shop'" :class="['w-12 h-12 rounded-full shadow-lg border-2 flex items-center justify-center', tab==='shop'?'bg-[#FF9CA8] text-white border-white':'bg-white text-[#FF9CA8]']"><i class="fa-solid fa-basket-shopping"></i></button>
+        </div>
+
+        <!-- Modal -->
+        <div v-if="addModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" @click.self="addModal=null">
+            <div class="bg-white p-6 rounded-2xl w-[80%]">
+                <h3 class="font-bold text-center mb-4">新增</h3>
+                <div v-if="addModal==='itinerary'" class="space-y-3">
+                    <input v-model="form.time" type="time" class="w-full bg-gray-50 p-2 rounded">
+                    <input v-model="form.name" type="text" placeholder="名稱" class="w-full bg-gray-50 p-2 rounded">
+                </div>
+                <div v-if="addModal==='shopping'" class="space-y-3">
+                    <input v-model="form.name" type="text" placeholder="商品名稱" class="w-full bg-gray-50 p-2 rounded">
+                </div>
+                <button @click="save" class="w-full bg-[#FF9CA8] text-white p-3 rounded-xl mt-4 font-bold">儲存</button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // ============================================
-        // ★★★ 您的 Firebase 設定 (已修正亞洲區網址) ★★★
-        // ============================================
+        // ★★★ 請確認這裡填入正確的 Key ★★★
         const firebaseConfig = {
             apiKey: "AIzaSyDic5wPcadyif7tvclKRzpzZ8q_bJKgptI",
             authDomain: "tokyo-20502.firebaseapp.com",
@@ -165,135 +97,63 @@
             messagingSenderId: "499120725183",
             appId: "1:499120725183:web:6d6caba2ac82c81e723a0a",
             measurementId: "G-29RJZM6KEG",
-            // ★ 這是您提供的正確網址 (asia-southeast1)
+            // ★ 這行是修正後的網址
             databaseURL: "https://tokyo-20502-default-rtdb.asia-southeast1.firebasedatabase.app"
         };
 
-        // 初始化 Firebase
-        try {
-            firebase.initializeApp(firebaseConfig);
-        } catch (e) {
-            console.error("Firebase 初始化失敗:", e);
-        }
-        
+        firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        const { createApp, ref, reactive, computed, onMounted } = Vue;
-
-        createApp({
+        Vue.createApp({
             setup() {
-                const loading = ref(true);
-                const bannerImage = ref('https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=1000&auto=format&fit=crop');
-                const currentTab = ref('itinerary');
-                const tabs = [
-                    { id: 'itinerary', icon: 'fa-regular fa-calendar-days' },
-                    { id: 'shopping', icon: 'fa-solid fa-basket-shopping' },
-                    { id: 'info', icon: 'fa-solid fa-circle-info' },
-                    { id: 'expenses', icon: 'fa-solid fa-yen-sign' },
-                ];
-                const tripDates = [
-                    { fullDate: '2026-02-26', dateDisplay: '2/26', week: 'Thu' },
-                    { fullDate: '2026-02-27', dateDisplay: '2/27', week: 'Fri' },
-                    { fullDate: '2026-02-28', dateDisplay: '2/28', week: 'Sat' },
-                    { fullDate: '2026-03-01', dateDisplay: '3/1', week: 'Sun' },
-                    { fullDate: '2026-03-02', dateDisplay: '3/2', week: 'Mon' },
-                    { fullDate: '2026-03-03', dateDisplay: '3/3', week: 'Tue' },
-                ];
-                const currentDayIndex = ref(0);
+                const loading = Vue.ref(true);
+                const tab = Vue.ref('trip');
+                const banner = Vue.ref('https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=600&auto=format&fit=crop');
+                const dayIdx = Vue.ref(0);
+                const dates = [{d:'2/26',w:'Thu',k:'2026-02-26'},{d:'2/27',w:'Fri',k:'2026-02-27'},{d:'2/28',w:'Sat',k:'2026-02-28'},{d:'3/1',w:'Sun',k:'2026-03-01'},{d:'3/2',w:'Mon',k:'2026-03-02'},{d:'3/3',w:'Tue',k:'2026-03-03'}];
+                
+                const trips = Vue.reactive({});
+                const shops = Vue.ref([]);
+                const addModal = Vue.ref(null);
+                const form = Vue.reactive({time:'10:00',name:'',cat:'景點'});
 
-                // 資料容器
-                const itineraryData = reactive({});
-                const shoppingList = ref([]);
-
-                // 監聽資料庫
-                onMounted(() => {
-                    db.ref('itinerary').on('value', (snapshot) => {
-                        const val = snapshot.val();
-                        if (val) {
-                            Object.keys(itineraryData).forEach(key => delete itineraryData[key]);
-                            Object.assign(itineraryData, val);
-                        }
-                        loading.value = false;
-                    }, (error) => {
-                        console.error(error);
+                Vue.onMounted(() => {
+                    db.ref('itinerary').on('value', s => {
+                        const v = s.val();
+                        if(v) { Object.keys(trips).forEach(k=>delete trips[k]); Object.assign(trips, v); }
                         loading.value = false;
                     });
-                    
-                    db.ref('shopping').on('value', (snapshot) => {
-                        shoppingList.value = snapshot.val() || [];
-                    });
+                    db.ref('shopping').on('value', s => { shops.value = s.val() || []; });
                 });
 
-                // 同步資料
-                const syncData = () => {
-                    db.ref('itinerary').set(itineraryData);
-                    db.ref('shopping').set(shoppingList.value);
-                };
-
-                const currentDayItinerary = computed(() => {
-                    const key = tripDates[currentDayIndex.value].fullDate;
-                    return itineraryData[key] || [];
+                const sync = () => { db.ref('itinerary').set(trips); db.ref('shopping').set(shops.value); };
+                
+                const currList = Vue.computed(() => {
+                    const k = dates[dayIdx.value].k;
+                    return trips[k] || [];
                 });
 
-                // Modal
-                const showModal = ref(false);
-                const modalType = ref('');
-                const isEditing = ref(false);
-                const editingId = ref(null);
-                const form = reactive({ category: 'sightseeing', time: '10:00', name: '', notes: '', image: '', checked: false });
-
-                const openAddModal = (type) => {
-                    modalType.value = type;
-                    isEditing.value = false;
-                    showModal.value = true;
-                    form.category = 'sightseeing'; form.time = '10:00'; form.name = ''; form.notes = ''; form.image = '';
-                };
-
-                const editItem = (item, idx) => {
-                    if (currentTab.value !== 'itinerary') return;
-                    modalType.value = 'itinerary';
-                    isEditing.value = true;
-                    editingId.value = idx;
-                    showModal.value = true;
-                    Object.assign(form, item);
-                };
-
-                const saveItem = () => {
-                    if (modalType.value === 'itinerary') {
-                        const key = tripDates[currentDayIndex.value].fullDate;
-                        if (!itineraryData[key]) itineraryData[key] = [];
-                        const newItem = { id: Date.now(), ...form };
-                        if (isEditing.value) itineraryData[key][editingId.value] = newItem;
-                        else {
-                            itineraryData[key].push(newItem);
-                            itineraryData[key].sort((a, b) => a.time.localeCompare(b.time));
-                        }
-                    } else if (modalType.value === 'shopping') {
-                        shoppingList.value.push({ ...form });
+                const save = () => {
+                    if(addModal.value === 'itinerary') {
+                        const k = dates[dayIdx.value].k;
+                        if(!trips[k]) trips[k] = [];
+                        trips[k].push({id:Date.now(), ...form});
+                        trips[k].sort((a,b)=>a.time.localeCompare(b.time));
+                    } else {
+                        shops.value.push({name:form.name});
                     }
-                    syncData();
-                    showModal.value = false;
+                    sync();
+                    addModal.value = null;
                 };
 
-                const deleteItem = (type, idx) => {
-                    if(!confirm('確定刪除？')) return;
-                    if (type === 'itinerary') {
-                        const key = tripDates[currentDayIndex.value].fullDate;
-                        itineraryData[key].splice(idx, 1);
-                    } else if (type === 'shopping') {
-                        shoppingList.value.splice(idx, 1);
-                    }
-                    syncData();
+                const del = (type, i) => {
+                    if(!confirm('刪除?')) return;
+                    if(type==='itinerary') trips[dates[dayIdx.value].k].splice(i,1);
+                    else shops.value.splice(i,1);
+                    sync();
                 };
 
-                const getCategoryLabel = (cat) => ({ sightseeing: '景點', food: '美食', shopping: '購物', transport: '交通', flight: '航班' }[cat] || cat);
-                const openMap = (loc) => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc + ' 東京')}`, '_blank');
-
-                return {
-                    loading, bannerImage, tabs, currentTab, tripDates, currentDayIndex, currentDayItinerary, shoppingList,
-                    showModal, modalType, isEditing, form,
-                    openAddModal, editItem, saveItem, deleteItem, getCategoryLabel, openMap, syncData
-                };
+                return { loading, tab, banner, dates, dayIdx, currList, shopList:shops, addModal, form, save, del };
             }
         }).mount('#app');
     </script>
