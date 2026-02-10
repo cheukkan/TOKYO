@@ -22,7 +22,7 @@
             theme: {
                 extend: {
                     colors: {
-                        'dark-base': '#0F172A',    // 極深藍灰背景
+                        'dark-base': '#000000',    // 極深藍灰背景
                         'dark-card': '#1E293B',    // 卡片背景
                         'neon-blue': '#38BDF8',    // 霓虹藍 (強調色)
                         'neon-purple': '#818CF8',  // 霓虹紫 (次要強調)
